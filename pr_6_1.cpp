@@ -122,13 +122,13 @@ Node** Node::child(bool right) {
 void Node::link_to(Node *new_parent) {
     parent = new_parent;
     Node **to_insert = (parent->child)(parent->key <= key);
-    if (*to_insert != NULL)
+    if (*to_insert)
         throw std::logic_error("Cannot link to an occupied node!");
     *to_insert = this;
 }
 
 void Node::unlink() {
-    if (parent != NULL) {
+    if (parent) {
         Node **to_free = (parent->child)(parent->key <= key);
         if (*to_free != this)
             throw std::logic_error("Parent-child link is corrupt!");
@@ -154,6 +154,7 @@ class BTree {
         void remove(Node* node);
     public:
         BTree();
+        ~BTree();
         BTree(Node *node);
         void insert(int num);
         void traverse_inorder(void (*callback)(Node*, void*), void* arg);
@@ -166,12 +167,29 @@ BTree::BTree() {
     root = NULL;
 }
 
+BTree::~BTree() {
+    root = NULL;
+}
+
 BTree::BTree(Node *node) {
-    root = node;
+    if (!root) {
+        return;
+    }
+    Deque queue;
+    queue.push_back(root);
+    while (queue.len() > 0) {
+        Node *current = (Node*)queue.pop_front();
+        Node *lc = current->left_child;
+        Node *rc = current->right_child;
+        if (lc) queue.push_back(lc);
+        if (rc) queue.push_back(rc);
+
+        delete current;
+    }
 }
 
 void BTree::insert(Node* node) {
-    if (root == NULL) {
+    if (!root) {
         root = node;
         return;
     }
@@ -179,7 +197,7 @@ void BTree::insert(Node* node) {
     Node* current = root;
     while (current != node) {
         Node *child = *((current->child)(node->key >= current->key));
-        if (child == NULL) {
+        if (!child) {
             node->link_to(current);
             current = node;
         } else {
@@ -194,38 +212,38 @@ void BTree::insert(int num) {
 }
 
 Node* BTree::remove_root() {
-    if (root->parent != NULL)
+    if (root->parent)
         throw std::logic_error("Cannot remove root from a non-free tree!");
 
     Node *old_root = root;
     Node *new_root = root->right_child;
     bool right_side = true;
 
-    if (new_root == NULL) {
+    if (!new_root) {
         new_root = root->left_child;
         right_side = false;
     }
-    if (new_root == NULL) {
+    if (!new_root) {
         root = NULL;
         return old_root;
     }
 
-    while (*(new_root->child(!right_side)) != NULL) {
+    while (*(new_root->child(!right_side))) {
         new_root = *(new_root->child(!right_side));
     }
 
     new_root->unlink();
-    if (*(new_root->child)(right_side) != NULL) {
+    if (*(new_root->child)(right_side)) {
         (*(new_root->child)(right_side))->unlink();
         (*(new_root->child)(right_side))->link_to(new_root->parent);
     }
 
-    if (root->left_child != NULL) {
+    if (root->left_child) {
         (root->left_child)->unlink();
         (root->left_child)->link_to(new_root);
     }
 
-    if (root->right_child != NULL) {
+    if (root->right_child) {
         (root->left_child)->unlink();
         (root->right_child)->link_to(new_root);
     }
@@ -243,7 +261,7 @@ void BTree::remove(Node *node) {
 }
 
 void BTree::traverse_inorder(void (*callback)(Node*, void*), void* arg) {
-    if (root == NULL) {
+    if (!root) {
         return;
     }
     Deque stack;
@@ -253,11 +271,11 @@ void BTree::traverse_inorder(void (*callback)(Node*, void*), void* arg) {
         Node *current = (Node*)stack.peek_back();
         Node *lc = current->left_child;
         Node *rc = current->right_child;
-        if ((!going_down) || (lc == NULL)) {
+        if ((!going_down) || (!lc)) {
             (*callback)(current, arg);
             going_down = false;
             stack.pop_back();
-            if (rc != NULL) {going_down = true; stack.push_back(rc);}
+            if (rc) {going_down = true; stack.push_back(rc);}
             continue;
         }
         stack.push_back(lc);
@@ -265,7 +283,7 @@ void BTree::traverse_inorder(void (*callback)(Node*, void*), void* arg) {
 }
 
 void BTree::traverse_preorder(void (*callback)(Node*, void*), void* arg) {
-    if (root == NULL) {
+    if (!root) {
         return;
     }
     Deque stack;
@@ -275,13 +293,13 @@ void BTree::traverse_preorder(void (*callback)(Node*, void*), void* arg) {
         Node *lc = current->left_child;
         Node *rc = current->right_child;
         (*callback)(current, arg);
-        if (rc != NULL) stack.push_back(rc);
-        if (lc != NULL) stack.push_back(lc);
+        if (rc) stack.push_back(rc);
+        if (lc) stack.push_back(lc);
     }
 }
 
 void BTree::traverse_postorder(void (*callback)(Node*, void*), void* arg) {
-    if (root == NULL) {
+    if (!root) {
         return;
     }
     Deque stack;
@@ -294,17 +312,17 @@ void BTree::traverse_postorder(void (*callback)(Node*, void*), void* arg) {
         Node *lc = current->left_child;
         Node *rc = current->right_child;
         if (going_down) {
-            if (lc != NULL) {
+            if (lc) {
                 stack.push_back(lc);
                 continue;
             }
-            if (rc !=  NULL) {
+            if (rc) {
                 stack.push_back(rc);
                 sec_stack.push_back(current);
                 continue;
             }
         } else {
-            if (rc != NULL) {
+            if (rc) {
                 if (sec_stack.peek_back() != current) {
                     sec_stack.push_back(current);
                     stack.push_back(rc);
@@ -321,7 +339,7 @@ void BTree::traverse_postorder(void (*callback)(Node*, void*), void* arg) {
 }
 
 void BTree::traverse_level(void (*callback)(Node*, void*), void* arg) {
-    if (root == NULL) {
+    if (!root) {
         return;
     }
     Deque queue;
@@ -330,16 +348,15 @@ void BTree::traverse_level(void (*callback)(Node*, void*), void* arg) {
         Node *current = (Node*)queue.pop_front();
         Node *lc = current->left_child;
         Node *rc = current->right_child;
-        if (lc != NULL) queue.push_back(lc);
-        if (rc != NULL) queue.push_back(rc);
+        if (lc) queue.push_back(lc);
+        if (rc) queue.push_back(rc);
 
         (*callback)(current, arg);
     }
 }
 
-void print_key_and_delete(Node *node, void* ) {
+void print_key(Node *node, void* ) {
     std::cout << node->key << " ";
-    delete node;
 }
 
 int main() {
@@ -353,7 +370,7 @@ int main() {
         tree.insert(key);
     }
 
-    tree.traverse_preorder(&print_key_and_delete, NULL);
+    tree.traverse_preorder(&print_key, NULL);
     std::cout << std::endl;
 
     return 0;
