@@ -167,27 +167,6 @@ BTree::BTree() {
     root = NULL;
 }
 
-BTree::~BTree() {
-    root = NULL;
-}
-
-BTree::BTree(Node *node) {
-    if (!root) {
-        return;
-    }
-    Deque queue;
-    queue.push_back(root);
-    while (queue.len() > 0) {
-        Node *current = (Node*)queue.pop_front();
-        Node *lc = current->left_child;
-        Node *rc = current->right_child;
-        if (lc) queue.push_back(lc);
-        if (rc) queue.push_back(rc);
-
-        delete current;
-    }
-}
-
 void BTree::insert(Node* node) {
     if (!root) {
         root = node;
@@ -355,8 +334,9 @@ void BTree::traverse_level(void (*callback)(Node*, void*), void* arg) {
     }
 }
 
-void print_key(Node *node, void* ) {
+void print_key_and_delete(Node *node, void* ) {
     std::cout << node->key << " ";
+    delete node;
 }
 
 int main() {
@@ -370,7 +350,7 @@ int main() {
         tree.insert(key);
     }
 
-    tree.traverse_preorder(&print_key, NULL);
+    tree.traverse_preorder(&print_key_and_delete, NULL);
     std::cout << std::endl;
 
     return 0;
