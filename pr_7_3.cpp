@@ -19,43 +19,73 @@
 #include <iostream>
 #include <stdexcept>
 #include <ctime>
+#include <cstring>
 
-
+template <typename T>
 class Deque {
     private:
         int head;
-        void **buffer;
+        T *buffer;
         int tail;
         int capacity;
         void expand();
     public:
         Deque();
         ~Deque();
-        int len();
-        void push_back(void *num);
-        void push_front(void *num);
-        void *pop_back();
-        void *pop_front();
-        void *peek_back();
-        void *peek_front();
+        Deque(const Deque<T> &source);
+        Deque(Deque<T> &&source) = delete;
+        Deque& operator=(const Deque<T> &source);
+        Deque& operator=(Deque<T> &&source) = delete;
+        const int len();
+        void push_back(T item);
+        void push_front(T item);
+        T pop_back();
+        T pop_front();
+        T peek_back();
+        T peek_front();
 };
 
-Deque::Deque() {
+template <typename T>
+Deque<T>::Deque() {
     head = 0;
     tail = 0;
     capacity = 1 << 8;
-    buffer = (void**)malloc(capacity*sizeof(void*));
+    buffer = (T*)malloc(capacity*sizeof(T));
 }
 
-Deque::~Deque() {
+template <typename T>
+Deque<T>::~Deque() {
     free(buffer);
 }
 
-void Deque::expand() {
-    void **new_buffer = (void**)malloc((capacity << 1)*sizeof(void*));
-    int len = this->len();
-    for (int i = 0; i < len; i++) {
-        new_buffer[i] = buffer[(head + i)%capacity];
+template <typename T>
+Deque<T>::Deque(const Deque<T> &source) {
+    head = source.head;
+    tail = source.tail;
+    capacity = source.capacity;
+    buffer = (T*)malloc(capacity*sizeof(T));
+    memcpy(buffer, source.buffer, capacity*sizeof(T));
+}
+
+template <typename T>
+Deque<T>& Deque<T>::operator= (const Deque<T> &source) {
+    head = source.head;
+    tail = source.tail;
+    capacity = source.capacity;
+    free(buffer);
+    buffer = (T*)malloc(capacity*sizeof(T));
+    memcpy(buffer, source.buffer, capacity*sizeof(T));
+}
+
+template <typename T>
+void Deque<T>::expand() {
+    T *new_buffer = (T*)malloc((capacity << 1)*sizeof(T));
+    const int len = this->len();
+    if (head <= tail) {
+        memcpy(new_buffer, buffer + head, len*sizeof(T));
+    } else {
+        memcpy(new_buffer, buffer + head, (capacity - head)*sizeof(T));
+        memcpy(new_buffer + (capacity - head), buffer, tail*sizeof(T));
     }
     head = 0;
     tail = len;
@@ -64,47 +94,54 @@ void Deque::expand() {
     buffer = new_buffer;
 }
 
-int Deque::len() {
+template <typename T>
+const int Deque<T>::len() {
     int len = (tail - head);
     if (len < 0) len += capacity;
     return len;
 }
 
-void Deque::push_back(void *num) {
+template <typename T>
+void Deque<T>::push_back(T item) {
     if (len() == capacity - 1) expand();
-    buffer[tail] = num;
+    buffer[tail] = item;
     tail = (tail + 1)%capacity;
 }
 
-void Deque::push_front(void *num) {
+template <typename T>
+void Deque<T>::push_front(T item) {
     if (len() == capacity - 1) expand();
     head--;
     if (head < 0) head += capacity;
-    buffer[head] = num;
+    buffer[head] = item;
 }
 
-void *Deque::pop_back() {
+template <typename T>
+T Deque<T>::pop_back() {
     if (len() == 0) std::logic_error("Trying to pop an empty deque.");
     tail--;
     if (tail < 0) tail += capacity;
     return buffer[tail];
 }
 
-void *Deque::pop_front() {
+template <typename T>
+T Deque<T>::pop_front() {
     if (len() == 0) std::logic_error("Trying to pop an empty deque.");
-    void *num = buffer[head];
+    T item = buffer[head];
     head = (head + 1)%capacity;
-    return num;
+    return item;
 }
 
-void *Deque::peek_back() {
+template <typename T>
+T Deque<T>::peek_back() {
     if (len() == 0) std::logic_error("Trying to peek an empty deque.");
     int m_tail = tail - 1;
     if (m_tail < 0) m_tail += capacity;
     return buffer[m_tail];
 }
 
-void *Deque::peek_front() {
+template <typename T>
+T Deque<T>::peek_front() {
     if (len() == 0) std::logic_error("Trying to peek an empty deque.");
     return buffer[head];
 }
@@ -113,264 +150,281 @@ void *Deque::peek_front() {
 /* ------------------------------------------------------------------------- */
 /* ------------------------------------------------------------------------- */
 
-class Node {
-    public:
-        int key;
-        int priority;
-        int rank;
-        Node(int key, int priority);
-        Node *parent;
-        Node *left_child;
-        Node *right_child;
-        void link_to(Node *child);
-        void unlink();
-        Node** child(bool right);
+struct Node {
+    int key;
+    int priority;
+    int rank;
+    Node *left_child;
+    Node *right_child;
+    Node(): key(0), priority(0), rank(1), left_child(NULL), right_child(NULL) {};
 };
-
-Node::Node(int key, int priority) {
-    parent = NULL;
-    left_child = NULL;
-    right_child = NULL;
-    this->key = key;
-    this->priority = priority;
-    rank = 1;
-}
-
-Node** Node::child(bool right) {
-    if (right) {
-        return &right_child;
-    } else {
-        return &left_child;
-    }
-}
-
-void Node::link_to(Node *new_parent) {
-    if (parent != NULL)
-        throw std::logic_error("Try to link a node that already has a parent!");
-    parent = new_parent;
-    Node **to_insert = (parent->child)(parent->key <= key);
-    if (*to_insert != NULL)
-        throw std::logic_error("Cannot link to an occupied node!");
-    if (parent->priority < this->priority)
-        throw std::logic_error("Cannot link to a lower priority node!");
-    *to_insert = this;
-    Node *current = parent;
-    while (current != NULL) {
-        current->rank += this->rank;
-        current = current->parent;
-    }
-}
-
-void Node::unlink() {
-    if (parent != NULL) {
-        Node **to_free = (parent->child)(parent->key <= key);
-        if (*to_free != this)
-            throw std::logic_error("Parent-child link is corrupt!");
-        *to_free = NULL;
-        Node *current = parent;
-        while (current != NULL) {
-            current->rank -= this->rank;
-            current = current->parent;
-        }
-        parent = NULL;
-    }
-}
-
-
-
-
-/* ------------------------------------------------------------------------- */
-
 
 class CartTree {
     private:
-        Node *root;
-        CartTree split(int key);
-        void merge(CartTree tree);
+    Node *root;
+
+    bool gt(int x, int y, bool eq);
+    Node **GetChild(Node *node, bool right);
+    Node *DropChild(Node *node, bool right);
+    Node *Split(int key, bool to_right = false);
+    void Merge(Node *sub_root);
+
+
     public:
-        CartTree();
-        CartTree(Node *node);
-        void insert(int key, int priority);
-        void remove(int key);
-        void wipe_nodes();
-        Node* get_by_order(int order);
+    void Insert(int key);
+    void Delete(int key);
+    Node *GetByOrder(int order);
+    CartTree();
+    ~CartTree();
+    CartTree(const CartTree &source);
+    CartTree(CartTree &&source) = delete;
+    CartTree& operator=(const CartTree &source);
+    CartTree& operator=(CartTree &&soruce) = delete;
 };
 
 CartTree::CartTree() {
     root = NULL;
+    srand(time(0));
 }
 
-CartTree::CartTree(Node *node) {
-    root = node;
-}
-
-void CartTree::wipe_nodes() {
-    if (root == NULL) {
-        return;
-    }
-    Deque stack;
+CartTree::~CartTree() {
+    if (!root) return;
+    Deque<Node*> stack;
     stack.push_back(root);
     while (stack.len() > 0) {
-        Node *current = (Node*)stack.pop_back();
+        Node *current = stack.pop_back();
         Node *lc = current->left_child;
         Node *rc = current->right_child;
         delete current;
-        if (rc != NULL) stack.push_back(rc);
-        if (lc != NULL) stack.push_back(lc);
+        if (rc) stack.push_back(rc);
+        if (lc) stack.push_back(lc);
     }
 }
 
-// Nodes with keys equal to \key go to the left tree
-CartTree CartTree::split(int key) {
-    if (root == NULL) throw std::logic_error(
-        "Trying to split an empty tree!");
-    Node *second_root = root;
-    while ((root->key > key) == (second_root->key > key)) {
-        second_root = *((second_root->child)(root->key <= key));
-        if (second_root == NULL) return CartTree();
-    }
-    Node *border_node = second_root->parent;
-    second_root->unlink();
-    CartTree second_tree = CartTree(second_root);
-    CartTree third_tree = second_tree.split(key);
-    if (third_tree.root != NULL) (third_tree.root)->link_to(border_node);
-    return second_tree;
-}
-
-// Keys in \this are smaller than keys in \tree
-void CartTree::merge(CartTree tree) {
-    if (tree.root == NULL) return;
-    if (root == NULL) {
-        root = tree.root;
+CartTree::CartTree(const CartTree &source) {
+    if (!source.root) {
+        root = NULL;
         return;
     }
-    bool slide_right = root->priority >= (tree.root)->priority;
-    Node *higher = slide_right ? root : tree.root;
-    Node *lower = slide_right ? tree.root : root;
-    root = higher;
-    while (*(higher->child)(slide_right) != NULL) {
-        if ((*(higher->child)(slide_right))->priority < lower->priority) break;
-        higher = *(higher->child)(slide_right);
-    }
-    Node* child = *(higher->child)(slide_right);
-    if (child != NULL) child->unlink();
-    lower->link_to(higher);
-    if (slide_right) {
-        CartTree(child).merge(CartTree(lower));
-    } else {
-        CartTree(lower).merge(CartTree(child));
+    root = new Node;
+    *root = *(source.root);
+    Deque<Node*> stack;
+    stack.push_back(root);
+    while (stack.len() > 0) {
+        Node *current = stack.pop_back();
+        Node *lc = current->left_child;
+        Node *rc = current->right_child;
+        if (rc) {
+            Node *n_rc = new Node;
+            *n_rc = *rc;
+            current->right_child = n_rc;
+            stack.push_back(n_rc);
+        }
+        if (lc) {
+            Node *n_lc = new Node;
+            *n_lc = *lc;
+            current->left_child = n_lc;
+            stack.push_back(n_lc);
+        }
     }
 }
 
-void CartTree::insert(int key, int priority) {
-    Node *new_node = new Node(key, priority);
-    if (root == NULL) {
+CartTree& CartTree::operator= (const CartTree &source) {
+    if (root) {
+        Deque<Node*> stack;
+        stack.push_back(root);
+        while (stack.len() > 0) {
+            Node *current = stack.pop_back();
+            Node *lc = current->left_child;
+            Node *rc = current->right_child;
+            delete current;
+            if (rc) stack.push_back(rc);
+            if (lc) stack.push_back(lc);
+        }
+    }
+    if (!source.root)  {
+        root = NULL;
+        return *this;
+    }
+    root = new Node;
+    *root = *(source.root);
+    Deque<Node*> stack;
+    stack.push_back(root);
+    while (stack.len() > 0) {
+        Node *current = stack.pop_back();
+        Node *lc = current->left_child;
+        Node *rc = current->right_child;
+        if (rc) {
+            Node *n_rc = new Node;
+            *n_rc = *rc;
+            current->right_child = n_rc;
+            stack.push_back(n_rc);
+        }
+        if (lc) {
+            Node *n_lc = new Node;
+            *n_lc = *lc;
+            current->left_child = n_lc;
+            stack.push_back(n_lc);
+        }
+    }
+    return *this;    
+}
+
+Node **CartTree::GetChild(Node *node, bool right) {
+    if (!node) return NULL;
+    if (right) return &(node->right_child);
+    return &(node->left_child);
+}
+
+Node *CartTree::DropChild(Node *node, bool right) {
+    return *GetChild(node, right);
+}
+
+bool CartTree::gt(int x, int y, bool eq) {
+    return !eq ? x > y : x >= y;
+}
+
+Node *CartTree::Split(int key, bool to_right) {
+    if (!root) return NULL;
+    Node *sub_root = root;
+    Deque<Node*> stack;
+    while (gt(root->key, key, to_right) == gt(sub_root->key, key, to_right)) {
+        stack.push_back(sub_root);
+        sub_root = *GetChild(sub_root, !gt(root->key, key, to_right));
+        if (!sub_root) return NULL;
+    }
+    Node *border = stack.peek_back();
+    Node *orig_root = root;
+    root = sub_root;
+    Node *sub_sub_root = Split(key, to_right);
+    root = orig_root;
+    *GetChild(border, !gt(root->key, key, to_right)) = sub_sub_root;
+    while (stack.len() > 0) (stack.pop_back())->rank -= sub_root->rank;
+    return sub_root;
+}
+
+// Assume that all keys in one tree are not smaller than keys in another tree
+void CartTree::Merge(Node *sub_root) {
+    if (!sub_root) return;
+    if (!root) {
+        root = sub_root;
+        return;
+    }
+    Node *higher = root->priority > sub_root->priority ? root : sub_root;
+    Node *lower = root->priority > sub_root->priority ? sub_root : root;
+    root = higher;
+    bool right_descent = higher->key <= lower->key;
+    Deque<Node*> stack;
+    Node *sub_sub_root = higher;
+    while (sub_sub_root) {
+        stack.push_back(sub_sub_root);
+        sub_sub_root = *GetChild(sub_sub_root, right_descent);
+        if (!sub_sub_root) break;
+        if (sub_sub_root->priority < lower->priority) break;
+    }
+    int rank_delta = 0;
+    if (sub_sub_root) rank_delta -= sub_sub_root->rank;
+    higher = stack.peek_back();
+    *GetChild(higher, right_descent) = lower;
+    Node* orig_root = root;
+    root = lower;
+    Merge(sub_sub_root);
+    root = orig_root;
+    rank_delta += lower->rank;
+    while (stack.len() > 0) (stack.pop_back())->rank += rank_delta;
+}
+
+void CartTree::Insert(int key) {
+    Node *new_node = new Node;
+    new_node->key = key;
+    new_node->priority = rand();
+    if (!root) {
         root = new_node;
         return;
     }
-    CartTree left_tree = split(key);
-    CartTree right_tree = root->key > key ? *this : left_tree;
-    left_tree =root->key > key ? left_tree : *this;
-    Node *current = left_tree.root;
-    if (current == NULL) {
-        left_tree.root = new_node;
-        left_tree.merge(right_tree);
-        root = left_tree.root;
+    Node *sub_root = Split(key);
+    if (root->key > key) {
+        Node *temp = root;
+        root = sub_root;
+        sub_root = temp;
+    }
+    if (!root) {
+        root = new_node;
+        Merge(sub_root);
         return;
     }
-    if (current->priority <= priority) {
-        current->link_to(new_node);
-        left_tree.root = new_node;
-        left_tree.merge(right_tree);
-        root = left_tree.root;
+    Node *sub_sub_root = Split(key, true);
+    if (root->key < key) {
+        Node *temp = root;
+        root = sub_sub_root;
+        sub_sub_root = temp;
+    }
+    Merge(new_node);
+    Merge(sub_sub_root);
+    Merge(sub_root);    
+}
+
+void CartTree::Delete(int key) {
+    if (!root) return;
+    Node *sub_root = Split(key);
+    if (root->key > key) {
+        Node *temp = root;
+        root = sub_root;
+        sub_root = temp;
+    }
+    if (!root) {
+        root = sub_root;
         return;
     }
-    while (current->priority > priority) {
-        if (current->right_child == NULL) {
-            new_node->link_to(current);
-            left_tree.merge(right_tree);
-            return;
-        }
-        current = current->right_child;
+    Node *sub_sub_root = Split(key, true);
+    if (root->key < key) {
+        Node *temp = root;
+        root = sub_sub_root;
+        sub_sub_root = temp;
     }
-    Node* parent = current->parent;
-    current->unlink();
-    current->link_to(new_node);
-    if (parent != NULL) new_node->link_to(parent);
-    left_tree.merge(right_tree);
-    return;
+    if (root) {
+        Node *temp = root;
+        root = root->right_child;
+        delete temp;
+    }
+    Merge(sub_sub_root);
+    Merge(sub_root);
 }
 
-void CartTree::remove(int key) {
-    if (root == NULL) return;
-    CartTree left_tree = split(key);
-    CartTree right_tree = root->key > key ? *this : left_tree;
-    left_tree = root->key > key ? left_tree : *this;
-    if (left_tree.root == NULL) return;
-    Node *current = left_tree.root;
-    while (current->key < key) {
-        if (current->right_child == NULL) return;
-        current = current->right_child;
-    }
-    if (current->key > key) return;
-    Node *parent = current->parent;
-    Node *lc = current->left_child;
-    Node *rc = current->right_child;
-    current->unlink();
-    if (lc != NULL) lc->unlink();
-    if (rc != NULL) rc->unlink();
-    CartTree tree = CartTree(lc);
-    tree.merge(CartTree(rc));
-    if (parent == NULL) {
-        left_tree.root = tree.root;
-    } else {
-        if (tree.root != NULL) (tree.root)->link_to(parent);
-    }
-    delete current;
-    left_tree.merge(right_tree);
-    root = left_tree.root;
-}
-
-Node* CartTree::get_by_order(int order) {
-    if (root == NULL) return NULL;
-    int root_rank = root->rank;
-    if (order >= root_rank) return NULL;
+Node* CartTree::GetByOrder(int order) {
+    if (!root) return NULL;
+    if (order >= root->rank) return NULL;
     Node *current = root;
-    int current_order = 0;
-    if (current->left_child != NULL) current_order += current->left_child->rank;
-    while (current_order != order) {
-        if (current == NULL) throw std::logic_error(
+    int current_order = current->left_child ? current->left_child->rank : 0;
+    while (order != current_order) {
+        if (!current) throw std::logic_error(
             "Can't find element with valid order, tree is corrupt!");
         if (order > current_order) {
             current = current->right_child;
-            if (current->left_child != NULL)
-                current_order += current->left_child->rank;
             current_order++;
-        } else {
+            if (current->left_child) current_order += current->left_child->rank;
+        }
+        if (order < current_order) {
             current = current->left_child;
-            if (current->right_child != NULL)
-                current_order -= current->right_child->rank;
             current_order--;
+            if (current->right_child) current_order -= current->right_child->rank;
         }
     }
     return current;
 }
 
 void order_statistics(int *commands, int n_commands) {
-    CartTree tree = CartTree();
-    srand(time(0));
-
+    CartTree tree;
     for (int i = 0; i < n_commands; i++) {
         int key = commands[2*i];
         int order = commands[2*i + 1];
         if (key > 0) {
-            tree.insert(key, rand());
+            tree.Insert(key);
         } else {
-            tree.remove(-key);
+            tree.Delete(-key);
         }
-        std::cout << (tree.get_by_order(order))->key << " ";
+        std::cout << (tree.GetByOrder(order))->key << " ";
     }
-    tree.wipe_nodes();
     std::cout << std::endl;
 }
 
@@ -388,6 +442,11 @@ int main() {
     free(commands);
     return 0;
 }
+
+
+
+
+
 
 
 
