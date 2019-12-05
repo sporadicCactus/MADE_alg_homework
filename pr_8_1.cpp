@@ -64,12 +64,16 @@ class HashTable {
     HashTable();
     HashTable(int capacity_bits, int in_place_bytes_);
     ~HashTable();
+    HashTable(const HashTable &source);
+    HashTable(HashTable &&source) = delete;
+    HashTable& operator=(const HashTable &source);
+    HashTable& operator=(HashTable &&source) = delete;
     bool Insert(std::string key);
     bool Insert(simple_str key);
     bool Delete(std::string key);
     bool Delete(simple_str key);
-    bool Has(std::string key);
-    bool Has(simple_str key);
+    bool Has(std::string key) const;
+    bool Has(simple_str key) const;
     void Flush();
 };
 
@@ -99,6 +103,51 @@ HashTable::~HashTable() {
         }
     }
     free(buffer);
+}
+
+HashTable::HashTable(const HashTable &source) {
+    capacity = source.capacity;
+    free_slots = source.free_slots;
+    del_slots = source.del_slots;
+    in_place_bytes = source.in_place_bytes;
+    buffer = (char*)malloc(capacity*in_place_bytes);
+    std::memcpy(buffer, source.buffer, capacity*in_place_bytes);
+    for (int i = 0; i < capacity; i++) {
+        char *ptr = buffer + i*in_place_bytes;
+        if ((uc)*ptr == 0xFF) {
+            char *external = *((char**)(ptr + 1));
+            int len = *((int*)external);
+            char *new_external = (char*)malloc(sizeof(int) + len);
+            std::memcpy(new_external, external, sizeof(int) + len);
+            *((char**)(ptr + 1)) = new_external;
+        }
+    }
+}
+
+HashTable& HashTable::operator= (const HashTable &source) {
+    for (int i = 0; i < capacity; i++) {
+        char *ptr = buffer + i*in_place_bytes;
+        if ((int)*ptr == 0xFF) {
+            free(*((char**)(ptr + 1)));
+        }
+    }
+    free(buffer);
+    capacity = source.capacity;
+    free_slots = source.free_slots;
+    del_slots = source.del_slots;
+    in_place_bytes = source.in_place_bytes;
+    buffer = (char*)malloc(capacity*in_place_bytes);
+    std::memcpy(buffer, source.buffer, capacity*in_place_bytes);
+    for (int i = 0; i < capacity; i++) {
+        char *ptr = buffer + i*in_place_bytes;
+        if ((uc)*ptr == 0xFF) {
+            char *external = *((char**)(ptr + 1));
+            int len = *((int*)external);
+            char *new_external = (char*)malloc(sizeof(int) + len);
+            std::memcpy(new_external, external, sizeof(int) + len);
+            *((char**)(ptr + 1)) = new_external;
+        }
+    }    
 }
 
 int HashTable::Hash(simple_str key, int mod) {
@@ -146,11 +195,15 @@ bool HashTable::Compare(simple_str key, int ind) {
 // Assuming non-empty key
 int HashTable::FindSlot(simple_str key) {
     int ind = Hash(key, capacity);
+    int del_ind = -1;
     for (int i = 0; i < capacity; i++) {
         ind = (ind + i) % capacity;
-        if ((uc)*(buffer + in_place_bytes*ind) == 0x00) return ind;
+        uc first_byte = (uc)*(buffer + in_place_bytes*ind);
+        if (first_byte == 0xF0 && del_ind < 0) del_ind  = ind;
+        if (first_byte == 0x00) return del_ind > 0 ? del_ind : ind;
         if (Compare(key, ind)) return -1;
     }
+    // Should be unreacheable since the table is rehashed before it is full.
     throw std::logic_error("The table is full!");
 }
 
@@ -220,9 +273,9 @@ int HashTable::Find(simple_str key) {
     if (key.len < 1) return -1;
     int ind = Hash(key, capacity);
     for (int i = 0; i < capacity; i++) {
+        ind = (ind + i) % capacity;
         if ((uc)*(buffer + in_place_bytes*ind) == 0x00) return -1;
         if (Compare(key, ind)) return ind;
-        ind = (ind + i) % capacity;
     }
     return -1;
 }
@@ -244,12 +297,12 @@ bool HashTable::Delete(simple_str key) {
     return true;
 }
 
-bool HashTable::Has(std::string key) {
+bool HashTable::Has(std::string key) const {
     simple_str s_key = {key.length(), (char*)key.data()};
     return Has(s_key);
 }
 
-bool HashTable::Has(simple_str key) {
+bool HashTable::Has(simple_str key) const {
     int ind = Find(key);
     if (ind < 0) return false;
     return true;
