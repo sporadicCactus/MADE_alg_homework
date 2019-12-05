@@ -36,7 +36,7 @@ class Deque {
         Deque(Deque<T> &&source) = delete;
         Deque& operator=(const Deque<T> &source);
         Deque& operator=(Deque<T> &&source) = delete;
-        const int len();
+        int len() const;
         void push_back(T item);
         void push_front(T item);
         T pop_back();
@@ -95,7 +95,7 @@ void Deque<T>::expand() {
 }
 
 template <typename T>
-const int Deque<T>::len() {
+int Deque<T>::len() const {
     int len = (tail - head);
     if (len < 0) len += capacity;
     return len;
