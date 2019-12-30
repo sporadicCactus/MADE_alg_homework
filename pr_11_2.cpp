@@ -16,7 +16,7 @@ struct node_with_count {
     int count;
 };
 
-int count_shortest_paths(const std::vector<std::vector<int> > adj_table,
+int count_shortest_paths(const std::vector<std::vector<int> >& adj_table,
     int node_start, int node_finish) {
     std::vector<int> n_shortest_paths(adj_table.size(), 0);
     n_shortest_paths.at(node_start) = 1;
