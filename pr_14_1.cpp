@@ -19,6 +19,8 @@
 #include <queue>
 #include <set>
 #include <vector>
+#include <tuple>
+#include <unordered_map>
 
 struct arrow {
     int target_node;
@@ -30,8 +32,48 @@ struct node_with_neighbour {
     int node;
     int neighbour;
     int dist;
-    bool operator<(const node_with_neighbour& other) const {
-        return dist > other.dist;
+};
+
+class NodeQueue {
+    private:
+    std::set<std::tuple<int, int, int> > ordered_set;
+    std::unordered_map<int, std::pair<int, int> > lookup_table;
+
+    public:
+    void push(node_with_neighbour arg) {
+        std::unordered_map<int, std::pair<int, int> >::iterator found =
+            lookup_table.find(arg.node);
+        if (found != lookup_table.end()) {
+            if (arg.dist >= found->second.second) return;
+            std::tuple<int, int, int> to_erase = std::make_tuple(
+                found->second.second, arg.node, found->second.first
+            );
+            std::set<std::tuple<int, int, int> >::iterator to_erase_it =
+                ordered_set.find(to_erase);
+            ordered_set.erase(to_erase_it);
+            found->second = std::make_pair(arg.neighbour, arg.dist);
+        } else {
+            lookup_table.insert(
+                std::make_pair(arg.node, std::make_pair(arg.neighbour, arg.dist))
+            );
+        }
+        ordered_set.insert(std::make_tuple(arg.dist, arg.node, arg.neighbour));
+    }
+    node_with_neighbour top() const {
+        std::tuple<int, int, int> tuple = *ordered_set.begin();
+        node_with_neighbour out;
+        out.node = std::get<1>(tuple);
+        out.neighbour = std::get<2>(tuple);
+        out.dist = std::get<0>(tuple);
+        return out;
+    }
+    int size() const {
+        return ordered_set.size();
+    }
+    void pop() {
+        std::tuple<int, int, int> tuple = *ordered_set.begin();
+        lookup_table.erase(std::get<1>(tuple));
+        ordered_set.erase(ordered_set.begin());
     }
 };
 
@@ -40,7 +82,7 @@ int min_tree_weight(const std::vector<std::vector<arrow> >& adj_table) {
     int tree_weight = 0;
     std::vector<bool> tree_nodes(adj_table.size(), false);
     tree_nodes[0] = true;
-    std::priority_queue<node_with_neighbour> front;
+    NodeQueue front;
     for (int i = 0; i < adj_table[0].size(); i++) {
         node_with_neighbour front_node;
         front_node.node = adj_table[0][i].target_node;
@@ -51,7 +93,6 @@ int min_tree_weight(const std::vector<std::vector<arrow> >& adj_table) {
     while (front.size() > 0) {
         node_with_neighbour considered = front.top();
         front.pop();
-        if (tree_nodes[considered.node]) continue;
         tree_nodes[considered.node] = true;
         tree_weight += considered.dist;
         for (int i = 0; i < adj_table[considered.node].size(); i++) {
