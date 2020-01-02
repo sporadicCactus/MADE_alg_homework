@@ -20,69 +20,84 @@
 #include <vector>
 #include <algorithm>
 
-struct node_and_edge {
-    int node;
-    int edge;
-    node_and_edge(int node_, int edge_): node(node_), edge(edge_) {}
+class Graph {
+    private:
+    std::vector<std::vector<std::pair<int, int> > > adj_table;
+    int edge_counter;
+
+    public:
+    Graph(int n_points): adj_table(n_points, std::vector<std::pair<int, int> >()), edge_counter(0) {}
+    void AddEdge(int v1, int v2) {
+        adj_table.at(v1).push_back(std::make_pair(v2, edge_counter));
+        adj_table.at(v2).push_back(std::make_pair(v1, edge_counter));
+        edge_counter++;
+    }
+    const std::vector<std::pair<int, int> >& GetNeighbours(int node_number) const {
+        return adj_table[node_number];
+    }
+    int GetSize() const {
+        return adj_table.size();
+    }
 };
 
-struct node_and_checked {
-    int node;
-    int checked;
-    node_and_checked(int node_, int checked_): node(node_),
-        checked(checked_) {}
-};
-
-std::vector<int> find_bridges(
-    const std::vector<std::vector<node_and_edge> > adj_table) {
+std::vector<int> find_bridges(const Graph& graph) {
     std::vector<int> bridges;
-    std::vector<int> in_times(adj_table.size(), -1);
-    std::vector<node_and_checked> node_stack;
-    node_stack.push_back(node_and_checked(0, 0));
+    std::vector<int> in_times(graph.GetSize(), -1);
+    std::vector<std::pair<int, int> > node_stack;
+    node_stack.push_back(std::make_pair(0, 0));
     in_times.at(0) = 0;
     int time = 0;
     int next_entry_point = 1;
     while (node_stack.size() > 0) {
+        // Depth-traversing the graph while noting the node entry times
         time++;
-        int current = node_stack.back().node;
-        int checked = node_stack.back().checked;
+        int current = node_stack.back().first;
+        int checked = node_stack.back().second;
         node_stack.pop_back();
         bool has_unvisited_neighbours = false;
-        for (int i = checked; i < adj_table.at(current).size(); i++) {
-            int to_put = adj_table.at(current).at(i).node;
+        const std::vector<std::pair<int, int>>& neighbours = graph.GetNeighbours(current);
+        for (int i = checked; i < neighbours.size(); i++) {
+            int to_put = neighbours.at(i).first;
             if (in_times.at(to_put) < 0) {
-                node_stack.push_back(node_and_checked(current, checked + 1));
-                node_stack.push_back(node_and_checked(to_put, 0));
+                node_stack.push_back(std::make_pair(current, checked + 1));
+                node_stack.push_back(std::make_pair(to_put, 0));
                 in_times.at(to_put) = time;
                 has_unvisited_neighbours = true;
                 break;
             }
         }
         if (has_unvisited_neighbours) continue;
-        int parent = node_stack.size() > 0 ? node_stack.back().node : -1;
+
+        // When node has no unvisited neighbours left, we pull back the smallest entry
+        // time from the neighbouring nodes (with the 'parent' edge excluded)
+        int parent = node_stack.size() > 0 ? node_stack.back().first : -1;
         int parent_edge;
         bool checked_parent = false;
-        for (int i = 0; i < adj_table.at(current).size(); i++) {
-            int neighbour = adj_table.at(current).at(i).node;
+        for (int i = 0; i < neighbours.size(); i++) {
+            int neighbour = neighbours.at(i).first;
             if (neighbour == parent && (!checked_parent)) {
                 checked_parent = true;
-                parent_edge = adj_table.at(current).at(i).edge;
+                parent_edge = neighbours.at(i).second;
                 continue;
             }
             in_times.at(current) = in_times.at(current) > in_times.at(neighbour)
                 ? in_times.at(neighbour) : in_times.at(current);
         }
+        // If the parent node's entry time is larger then the current node's entry time,
+        // the parent edge cannot be a bridge. Otherwise it must be a bridge.
         if (parent >= 0) {
             if (in_times.at(parent) < in_times.at(current)) {
                 bridges.push_back(parent_edge);
             }
         }
+
+        // If the graph is not connected, we need to find a new entry point for the traversal.
         if (node_stack.size() == 0) {
-            for (int i = next_entry_point; i < adj_table.size(); i++) {
+            for (int i = next_entry_point; i < graph.GetSize(); i++) {
                 if (in_times.at(i) < 0) {
                     next_entry_point = i + 1;
                     in_times.at(i) = time;
-                    node_stack.push_back(node_and_checked(i, 0));
+                    node_stack.push_back(std::make_pair(i, 0));
                     break;
                 }
             }
@@ -98,16 +113,15 @@ int main() {
     input >> n_nodes;
     int n_edges;
     input >> n_edges;
-    std::vector<std::vector<node_and_edge> > adj_table(n_nodes,
-        std::vector<node_and_edge>());
+    Graph graph(n_nodes);
     for (int i = 0; i < n_edges; i++) {
         int node_1, node_2;
         input >> node_1 >> node_2;
-        adj_table.at(node_1 - 1).push_back(node_and_edge(node_2 - 1, i + 1));
-        adj_table.at(node_2 - 1).push_back(node_and_edge(node_1 - 1, i + 1));
+        node_1--;
+        node_2--;
+        graph.AddEdge(node_1, node_2);
     }
-
-    std::vector<int> bridges = find_bridges(adj_table);
+    std::vector<int> bridges = find_bridges(graph);
     std::sort(bridges.begin(), bridges.end());
     output << bridges.size() << '\n';
     for (int i = 0; i < bridges.size(); i++)  {
