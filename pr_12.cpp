@@ -18,6 +18,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <stack>
 #include <algorithm>
 
 class Graph {
@@ -28,9 +29,9 @@ class Graph {
     public:
     Graph(int n_points): adj_table(n_points, std::vector<std::pair<int, int> >()), edge_counter(0) {}
     void AddEdge(int v1, int v2) {
+        edge_counter++;
         adj_table.at(v1).push_back(std::make_pair(v2, edge_counter));
         adj_table.at(v2).push_back(std::make_pair(v1, edge_counter));
-        edge_counter++;
     }
     const std::vector<std::pair<int, int> >& GetNeighbours(int node_number) const {
         return adj_table[node_number];
@@ -40,70 +41,120 @@ class Graph {
     }
 };
 
-std::vector<int> find_bridges(const Graph& graph) {
+
+class BridgeFinder {
+    private:
+    const Graph& graph;
+    std::vector<int> in_times;
     std::vector<int> bridges;
-    std::vector<int> in_times(graph.GetSize(), -1);
-    std::vector<std::pair<int, int> > node_stack;
-    node_stack.push_back(std::make_pair(0, 0));
-    in_times.at(0) = 0;
-    int time = 0;
-    int next_entry_point = 1;
-    while (node_stack.size() > 0) {
-        // Depth-traversing the graph while noting the node entry times
-        time++;
-        int current = node_stack.back().first;
-        int checked = node_stack.back().second;
-        node_stack.pop_back();
-        bool has_unvisited_neighbours = false;
-        const std::vector<std::pair<int, int>>& neighbours = graph.GetNeighbours(current);
-        for (int i = checked; i < neighbours.size(); i++) {
-            int to_put = neighbours.at(i).first;
-            if (in_times.at(to_put) < 0) {
-                node_stack.push_back(std::make_pair(current, checked + 1));
-                node_stack.push_back(std::make_pair(to_put, 0));
-                in_times.at(to_put) = time;
-                has_unvisited_neighbours = true;
-                break;
+    int next_entry_point;
+
+    // The first int in the pair is a node number, the other one is
+    // the number of already checked neighbours of this node
+    std::stack<std::pair<int, int> > stack;
+
+    int find_next_node() {
+        int current_node = stack.top().first;
+        int n_neighbours_checked = stack.top().second;
+        const std::vector<std::pair<int, int> >& neighbours = graph.GetNeighbours(current_node);
+        for (int i = n_neighbours_checked; i < neighbours.size(); i++) {
+            int next_candidate = neighbours[i].first;
+            // Checking if the candidate node is yet unvisited
+            if (in_times[next_candidate] < 0) {
+                stack.pop();
+                stack.push(std::make_pair(current_node, i + 1));
+                return next_candidate;
             }
         }
-        if (has_unvisited_neighbours) continue;
+        return -1;
+    }
 
-        // When node has no unvisited neighbours left, we pull back the smallest entry
-        // time from the neighbouring nodes (with the 'parent' edge excluded)
-        int parent = node_stack.size() > 0 ? node_stack.back().first : -1;
-        int parent_edge;
+    int pull_back_entry_time_and_get_parent_edge(int current_node) {
+        int parent_node = stack.size() > 0 ? stack.top().first : -1;
+        int parent_edge = -1;
         bool checked_parent = false;
+        const std::vector<std::pair<int, int> >& neighbours = graph.GetNeighbours(current_node);
         for (int i = 0; i < neighbours.size(); i++) {
-            int neighbour = neighbours.at(i).first;
-            if (neighbour == parent && (!checked_parent)) {
+            int neighbour = neighbours[i].first;
+            if ((neighbour == parent_node) && (!checked_parent)) {
                 checked_parent = true;
-                parent_edge = neighbours.at(i).second;
+                parent_edge = neighbours[i].second;
                 continue;
             }
-            in_times.at(current) = in_times.at(current) > in_times.at(neighbour)
-                ? in_times.at(neighbour) : in_times.at(current);
+            in_times[current_node] = in_times[current_node] > in_times[neighbour]
+                ? in_times[neighbour] : in_times[current_node];
         }
-        // If the parent node's entry time is larger then the current node's entry time,
-        // the parent edge cannot be a bridge. Otherwise it must be a bridge.
-        if (parent >= 0) {
-            if (in_times.at(parent) < in_times.at(current)) {
-                bridges.push_back(parent_edge);
-            }
-        }
+        return parent_edge;
+    }
 
-        // If the graph is not connected, we need to find a new entry point for the traversal.
-        if (node_stack.size() == 0) {
-            for (int i = next_entry_point; i < graph.GetSize(); i++) {
-                if (in_times.at(i) < 0) {
-                    next_entry_point = i + 1;
-                    in_times.at(i) = time;
-                    node_stack.push_back(std::make_pair(i, 0));
-                    break;
+    public:
+    // Entry time for each node is initialized to -1
+    BridgeFinder(const Graph& graph_): graph(graph_), in_times(graph_.GetSize(), -1) {
+        if (graph.GetSize() < 1) return;
+        // Initialize stack with some node
+        stack.push(std::make_pair(0, 0));
+        // The entry time for the initial node is zero
+        in_times[0] = 0;
+        // When the initial node's connected component is
+        // fully explored, this will be the starting point
+        // for searching another connected component.
+        next_entry_point = 1;
+        
+        // Setting the time counter
+        int time = 0;
+        // Repeating while we have nodes to consider
+        while (stack.size() > 0) { 
+            time++;
+            int next_node = find_next_node();
+            // Check if there is a next node to visit
+            if (next_node >= 0) {
+                stack.push(std::make_pair(next_node, 0));
+                in_times[next_node] = time;
+                continue;
+            }
+            
+            // If there is no next node to visit, we start to retract
+            // First, we update the entry time of the node on the top of the stack,
+            // making it the smallest entry time of its' neighbours (but we don't
+            // follow the edge we used to get to this node)
+            int current_node = stack.top().first;
+            stack.pop();
+            int parent_edge = pull_back_entry_time_and_get_parent_edge(current_node);
+
+            // Now if the current node's entry time is smaller than its' parent's
+            // entry time, there is a "shortcut" to the visited part of the graph,
+            // so the parent edge cannot be a bridge. Otherwise it must be a bridge
+            if (stack.size() > 0) {
+                int parent_node = stack.top().first;
+                if (in_times[current_node] > in_times[parent_node]) {
+                    bridges.push_back(parent_edge);
                 }
+            }
+
+            // It could be the stack is empty now, but the graph is not fully explored:
+            // we couldn't reach disconnected components. So we need to check if there is
+            // some yet unvisited node in the graph, and use it as a new entry point
+            if (stack.size() == 0) {
+                for (int i = next_entry_point; i < graph.GetSize(); i++) {
+                    if (in_times.at(i) < 0) {
+                        next_entry_point = i + 1;
+                        in_times.at(i) = time;
+                        stack.push(std::make_pair(i, 0));
+                        break;
+                    }
+                }   
             }
         }
     }
-    return bridges;
+    const std::vector<int>& GetBridges() {
+        return bridges;
+    }
+};
+
+
+std::vector<int> find_bridges(const Graph& graph) {
+    BridgeFinder bridge_finder(graph);
+    return bridge_finder.GetBridges();
 }
 
 int main() {
