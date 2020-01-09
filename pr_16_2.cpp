@@ -2,73 +2,48 @@
 #include <vector>
 #include <string>
 
-
-std::vector<int> find_substring(std::string substr, std::string str) {
-    if (substr.size() == 0) return std::vector<int>();
-    if (substr.size() > str.size()) return std::vector<int>();
-    std::vector<int> z_function;
-    z_function.push_back(substr.size());
+std::vector<int> z_function(const std::string& str) {
+    if (str.size() == 0) return std::vector<int>();
+    std::vector<int> z_fn(str.size(), str.size());
     int l = 1;
     int r = 1;
-    for (int i = 1; i < substr.size(); i++) {
-        if (i >= r) {
-            l = i;
-            r = i;
-            for (int j = l; j < substr.size(); j++) {
-                if (substr.at(j) == substr.at(j - l)) {
-                    r++;
-                } else {
-                    break;
-                }
-            }
-            z_function.push_back(r - l);
-            continue;
-        }
-        if (z_function.at(i - l) < r - i) {
-            z_function.push_back(z_function.at(i-l));
+    for (int i = 1; i < str.size(); i++) {
+        if (z_fn[i - l] < r - i) {
+            z_fn[z_fn[i - l]];
             continue;
         }
         l = i;
-        for (int j = r; j < substr.size(); j++) {
-            if (substr.at(j) == substr.at(j - l)) {
+        r = i < r ? r : i;
+        for (int j = r; j < str.size(); j++) {
+            if (str[j] ==  str[j - l]) {
                 r++;
             } else {
                 break;
             }
         }
-        z_function.push_back(r - l);
+        z_fn[i] = r - l;
     }
+    return z_fn;
+}
+
+std::vector<int> find_substring(const std::string& substr, const std::string& str) {
+    if (substr.size() == 0) return std::vector<int>();
+    if (substr.size() > str.size()) return std::vector<int>();
+    std::vector<int> z_fn = z_function(substr);
     std::vector<int> match_indices;
-    l = 0;
-    r = 0;
+    int l = 0;
+    int r = 0;
     for (int i = 0; i < str.size() - substr.size() + 1; i++) {
-        if (i >= r) {
-            l = i;
-            r = i;
-            for (int j = l; j < l + substr.size(); j++) {
-                if (str.at(j) == substr.at(j - l)) {
-                    r++;
-                } else {
-                    break;
-                }
-            }
-            z_function.push_back(r - l);
-            if ((r - l) == substr.size()) match_indices.push_back(i);
-            continue;
-        }
-        if (z_function.at(i - l) < r - i) {
-            z_function.push_back(z_function.at(i - l));
-            continue;
-        }
+        if (z_fn[(i - l) >= substr.size() ? 0 : i - l] < r - i) continue;
         l = i;
-        for (int j = r; (j < l + substr.size()) && (j < str.size()); j++) {
-            if (str.at(j) == substr.at(j - l)) {
+        r = i < r ? r : i;
+        for (int j = r; j < l + substr.size(); j++) {
+            if (str[j] ==  substr[j - l]) {
                 r++;
             } else {
                 break;
             }
         }
-        z_function.push_back(r - l);
         if ((r - l) == substr.size()) match_indices.push_back(i);
     }
     return match_indices;
